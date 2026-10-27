@@ -10,7 +10,7 @@ import numpy as np
 from numba import njit, prange, get_num_threads
 
 # ----------------------------------------------------------------------------------------------
-# Tuning constants (same idea as in the Rust version)
+# Tuning constants
 # ----------------------------------------------------------------------------------------------
 
 # Independent orbit segments advanced in lock-step inside one task. The map is a serial
@@ -25,7 +25,7 @@ PARALLEL_THRESHOLD = 1_000_000
 # The per-task histograms are summed into uint64 afterwards, so n itself is not limited.
 MAX_POINTS_PER_TASK = 1 << 31
 
-# Where the PNG files are written (same folder as the Rust version).
+# Where the PNG files are written.
 OUTPUT_DIR = '/Users/ralf/Projects/hopalong_pictures'
 
 # How a pixel's hit count is mapped onto the colour map.
@@ -37,7 +37,7 @@ OUTPUTS = ('counts', 'density')
 
 
 # ----------------------------------------------------------------------------------------------
-# User input (unchanged)
+# User input
 # ----------------------------------------------------------------------------------------------
 
 def validate_input(prompt, input_type=float, check_positive_non_zero=False, min_value=None):
@@ -226,7 +226,7 @@ def warm_up():
 
 
 # ----------------------------------------------------------------------------------------------
-# Plotting (unchanged apart from the cosmetic bits)
+# Plotting
 # ----------------------------------------------------------------------------------------------
 
 def setup_plot(ax, title=None, xlabel=None, ylabel=None):
@@ -239,7 +239,7 @@ def setup_plot(ax, title=None, xlabel=None, ylabel=None):
 
 
 def make_norm(image, scale):
-    # Same three mappings as the Rust version (relative brightness 0..1):
+    #   relative brightness 0..1:
     #   linear: d/max      sqrt: sqrt(d/max)      log: ln(1+d)/ln(1+max)
     max_hit = max(int(np.max(image)), 1)
     if scale == 'sqrt':
@@ -284,7 +284,7 @@ def render_trajectory_image(image, extents, params, color_map, norm):
 
 
 def save_png(image, params, color_map, norm, directory=OUTPUT_DIR):
-    # Raw picture only (no axes / colour bar), one image pixel per grid cell, like the Rust version.
+    # Raw picture only (no axes / colour bar), one image pixel per grid cell.
     suffix = '' if params['scale'] == 'linear' else f'_{params["scale"]}'
     if params.get('output') == 'density':
         suffix += '_density'
