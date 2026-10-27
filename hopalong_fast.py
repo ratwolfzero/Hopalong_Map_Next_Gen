@@ -59,7 +59,7 @@ def validate_input(prompt, input_type=float, check_positive_non_zero=False, min_
                 f'Invalid input. Please enter a valid {input_type.__name__} value. ({e})')
 
 
-def validate_attractor_parameters(a, b, c):
+def validate_map_parameters(a, b, c):
     while a == 0 and c == 0:
         print('Invalid combination of parameters: a=0, b=0, c=0 or a=0, b=any, c=0')
         c = validate_input('Enter a float value for "c": ')
@@ -78,7 +78,7 @@ def get_attractor_parameters():
     a = validate_input('Enter a float value for "a": ')
     b = validate_input('Enter a float value for "b": ')
     c = validate_input('Enter a float value for "c": ')
-    a, b, c = validate_attractor_parameters(a, b, c)
+    a, b, c = validate_map_parameters(a, b, c)
     n = validate_input(
         'Enter a positive integer value > 1000 for "n": ', int, True, 1000)
     scale = validate_choice(
