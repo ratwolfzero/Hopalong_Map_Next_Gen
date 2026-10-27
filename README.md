@@ -47,7 +47,7 @@ To solve this bottleneck without consuming gigabytes of memory, both high-perfor
 ### Phase 2: Pass 2 (The Multi-Core Team)
 
 * **What it does:** Multiple CPU cores run simultaneously using Numba's `prange`. Each core grabs its assigned checkpoint, instantly jumps to its starting coordinates, and processes its chunk independently into a private grid.
-* **Memory Efficiency:** Instead of storing 100 million trajectory points in RAM, the script only stores a tiny table of checkpoint coordinates (a few dozen rows). This keeps memory usage down to a few kilobytes regardless of how large $n$ gets.
+* **Trajectory Memory Efficiency:** Instead of storing 100 million trajectory points in RAM, the script stores only a small table of checkpoint coordinates. However, pass 2 allocates private pixel histograms proportional to the number of tasks and image dimensions; the histogram version also creates float64 reduction and density arrays. Both scripts report peak process RAM so this working memory is visible.
 
 ---
 
@@ -55,13 +55,14 @@ To solve this bottleneck without consuming gigabytes of memory, both high-perfor
 
 This project offers two distinct implementations leveraging the same high-speed checkpoint backbone:
 
-| Feature / Metric | Pixel-Based Density (`hopalong_fast.py`) | True Density Histogram (`hopalong_fast_histogram.py`) |
+| Feature / Metric | Pixel-Based Density (`hopalong_fast.py`) | True Density Histogram (`hopalong_fast_hist.py`) |
 | :--- | :--- | :--- |
 | **Output Values** | Discrete integer hit counts (N₀) per pixel | Continuous float values (R⁺) representing normalized probability density |
 | **Mathematical Formula** | `Hit Count = Σ Hits` | `Density = Raw Hits / (N * Δx * Δy)` |
 | **Primary Use Case** | Fast visual exploration, artistic rendering, and qualitative analysis | Scientific data analysis, quantitative comparisons, information entropy, and probability modeling |
 | **Execution Speed** | Ultra-fast (multi-core parallel) | Virtually identical (adds a single post-processing normalization step) |
 | **Visual Appearance** | Identical to human eye | Identical to human eye |
+| **PNG and RAM reporting** | Saves a PNG and reports peak process RAM | Saves a separate `_histogram.png` and reports peak process RAM |
 
 ### Key Differences & Practical Guidance
 
@@ -114,4 +115,4 @@ Both scripts run interactively in your terminal and prompt for parameters ($a, b
 python hopalong_fast.py
 
 # Run the true probability density histogram version
-python hopalong_fast_histogram.py
+python hopalong_fast_hist.py

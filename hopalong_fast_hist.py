@@ -16,6 +16,9 @@ LANES = 4
 PARALLEL_THRESHOLD = 1_000_000
 MAX_POINTS_PER_TASK = 1 << 31
 
+# Where the PNG files are written (same folder as the fast version).
+OUTPUT_DIR = '/Users/ralf/Projects/hopalong_pictures'
+
 # How a pixel's density is mapped onto the color map
 SCALES = ('linear', 'sqrt', 'log')
 
@@ -208,6 +211,34 @@ def colorbar(fig, ax, img, norm, scale):
     cbar.set_ticklabels([f'{v:.2e}' for v in ticks])
 
 
+def save_png(density_histogram, params, color_map, norm, directory=OUTPUT_DIR):
+    # Save the color-mapped density grid without axes or colorbar.
+    suffix = '' if params['scale'] == 'linear' else f'_{params["scale"]}'
+    name = (f'py_num={params["n"]}_a={params["a"]}_b={params["b"]}_c={params["c"]}'
+            f'_histogram{suffix}.png')
+    try:
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, name)
+        rgba = plt.get_cmap(color_map)(norm(density_histogram))
+        plt.imsave(path, rgba, origin='lower')
+        print(f'Image saved to: {path}')
+        return path
+    except OSError as e:
+        print(f'Could not save image to {directory}: {e}')
+        return None
+
+
+def display_resource_usage(wall_seconds, pass_times):
+    # ru_maxrss is in bytes on macOS but in kilobytes on Linux
+    divisor = 1024.0 * 1024.0 if sys.platform == 'darwin' else 1024.0
+    mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / divisor
+
+    print(f'Pass 1 (extents + checkpoints, serial): {pass_times[0]:.2f} s')
+    print(f'Pass 2 (parallel histogram binning):    {pass_times[1]:.2f} s')
+    print(f'Wall-clock time (compute): {wall_seconds:.2f} s')
+    print(f'Memory (RAM): {mem_mb:.2f} MByte used (peak)')
+
+
 # ----------------------------------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------------------------------
@@ -221,12 +252,11 @@ def main(image_size=(1000, 1000), color_map='hot'):
             params['a'], params['b'], params['c'], params['n'], image_size)
         wall = time.perf_counter() - start
 
-        print(f'Pass 1 (extents + checkpoints, serial): {pass_times[0]:.2f} s')
-        print(f'Pass 2 (parallel histogram binning):    {pass_times[1]:.2f} s')
-        print(f'Total Wall-clock time:                  {wall:.2f} s')
+        display_resource_usage(wall, pass_times)
 
         # Create normalization rule based on selected scale
         norm = make_norm(density_hist, params['scale'])
+        save_png(density_hist, params, color_map, norm)
 
         fig = plt.figure(figsize=(8, 8), facecolor='gainsboro')
         ax = fig.add_subplot(111)
