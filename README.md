@@ -38,7 +38,7 @@ Because every point depends strictly on the one before it, standard parallel pro
 
 ## The Solution: The Checkpoint 2-Pass Approach
 
-To solve this bottleneck without consuming gigabytes of memory, both high-performance scripts (`hopalong_fast.py` and `hopalong_fast_histogram.py`) utilize a **two-pass checkpoint architecture**:
+To solve this bottleneck without consuming gigabytes of memory, both high-performance scripts (`hopalong_fast.py` and `hopalong_fast_hist.py`) utilize a **two-pass checkpoint architecture**:
 
 ### Phase 1: Pass 1 (The Pathfinder)
 
