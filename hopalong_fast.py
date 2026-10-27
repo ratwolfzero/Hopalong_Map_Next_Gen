@@ -31,6 +31,10 @@ OUTPUT_DIR = '/Users/ralf/Projects/hopalong_pictures'
 # How a pixel's hit count is mapped onto the colour map.
 SCALES = ('linear', 'sqrt', 'log')
 
+# 'counts': hits per pixel (original image). 'density': equal-width bins + colour bar in
+# probability-density units (same numbers as np.histogram2d(..., density=True)).
+OUTPUTS = ('counts', 'density')
+
 
 # ----------------------------------------------------------------------------------------------
 # User input (unchanged)
@@ -61,12 +65,12 @@ def validate_attractor_parameters(a, b, c):
     return a, b, c
 
 
-def validate_scale(prompt, default='linear'):
+def validate_choice(prompt, options, default):
     while True:
         value = input(prompt).strip().lower() or default
-        if value in SCALES:
+        if value in options:
             return value
-        print(f'Invalid input. Please enter one of: {", ".join(SCALES)}.')
+        print(f'Invalid input. Please enter one of: {", ".join(options)}.')
 
 
 def get_attractor_parameters():
@@ -75,8 +79,9 @@ def get_attractor_parameters():
     c = validate_input('Enter a float value for "c": ')
     a, b, c = validate_attractor_parameters(a, b, c)
     n = validate_input('Enter a positive integer value > 1000 for "n": ', int, True, 1000)
-    scale = validate_scale('Colour scale (linear / sqrt / log) [linear]: ')
-    return {'a': a, 'b': b, 'c': c, 'n': n, 'scale': scale}
+    scale = validate_choice('Colour scale (linear / sqrt / log) [linear]: ', SCALES, 'linear')
+    output = validate_choice('Colour bar shows (counts / density) [counts]: ', OUTPUTS, 'counts')
+    return {'a': a, 'b': b, 'c': c, 'n': n, 'scale': scale, 'output': output}
 
 
 # ----------------------------------------------------------------------------------------------
@@ -130,24 +135,37 @@ def first_pass(a, b, c, segments, seg, rem):
 
 
 @njit(inline='always')
-def _hit(x, y, min_x, min_y, scale_x, scale_y, hist):
+def _hit(x, y, min_x, min_y, scale_x, scale_y, hist, uniform):
     h, w = hist.shape
-    # np.rint rounds half-to-even like Python's round(). Range-check in float *before* the
-    # int cast, so NaN/inf points are discarded instead of hitting a garbage index.
-    px = np.rint((x - min_x) * scale_x)
-    py = np.rint((y - min_y) * scale_y)
+    fx = (x - min_x) * scale_x
+    fy = (y - min_y) * scale_y
+    if uniform:
+        # Equal-width bins [edge_i, edge_i+1), exactly like np.histogram2d. Last bin is closed.
+        px = np.floor(fx)
+        py = np.floor(fy)
+        if px == w:
+            px = w - 1.0
+        if py == h:
+            py = h - 1.0
+    else:
+        # "Pixel" mode (the original image): np.rint rounds half-to-even like Python's round().
+        px = np.rint(fx)
+        py = np.rint(fy)
+    # Range-check in float *before* the int cast, so NaN/inf points are discarded instead of
+    # hitting a garbage index.
     if 0.0 <= px < w and 0.0 <= py < h:
         hist[int(py), int(px)] += 1
 
 
 @njit(cache=True, parallel=True)
-def second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size):
+def second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size, uniform):
     # Pass 2: every task replays LANES consecutive segments in lock-step into its OWN uint32
     # histogram (no sharing -> no locks, no atomics, cache friendly).
     h, w = image_size
     min_x, max_x, min_y, max_y = extents
-    scale_x = (w - 1) / (max_x - min_x)  # column
-    scale_y = (h - 1) / (max_y - min_y)  # row
+    # pixel mode: first/last grid point sit ON min/max (w-1 steps); uniform mode: w equal bins
+    scale_x = (w if uniform else w - 1) / (max_x - min_x)  # column
+    scale_y = (h if uniform else h - 1) / (max_y - min_y)  # row
 
     hists = np.zeros((tasks, h, w), dtype=np.uint32)
 
@@ -161,10 +179,10 @@ def second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size):
 
         for _ in range(seg):
             # four independent dependency chains -> the CPU can overlap their sqrt latencies
-            _hit(x0, y0, min_x, min_y, scale_x, scale_y, hist)
-            _hit(x1, y1, min_x, min_y, scale_x, scale_y, hist)
-            _hit(x2, y2, min_x, min_y, scale_x, scale_y, hist)
-            _hit(x3, y3, min_x, min_y, scale_x, scale_y, hist)
+            _hit(x0, y0, min_x, min_y, scale_x, scale_y, hist, uniform)
+            _hit(x1, y1, min_x, min_y, scale_x, scale_y, hist, uniform)
+            _hit(x2, y2, min_x, min_y, scale_x, scale_y, hist, uniform)
+            _hit(x3, y3, min_x, min_y, scale_x, scale_y, hist, uniform)
             x0, y0 = _step(x0, y0, a, b, c)
             x1, y1 = _step(x1, y1, a, b, c)
             x2, y2 = _step(x2, y2, a, b, c)
@@ -172,23 +190,34 @@ def second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size):
 
         if t == tasks - 1:  # leftover points belong to the very last segment of the orbit
             for _ in range(rem):
-                _hit(x3, y3, min_x, min_y, scale_x, scale_y, hist)
+                _hit(x3, y3, min_x, min_y, scale_x, scale_y, hist, uniform)
                 x3, y3 = _step(x3, y3, a, b, c)
 
     return hists
 
 
-def compute_trajectory_image(a, b, c, n, image_size):
-    # Returns (image as uint64, extents, (pass1_seconds, pass2_seconds)).
+def compute_trajectory_image(a, b, c, n, image_size, uniform_bins=False):
+    # Returns (hit counts as uint64, extents, (pass1_seconds, pass2_seconds)).
+    # uniform_bins=True -> equal-width histogram bins (needed for a true density).
     tasks, segments, seg, rem = make_plan(n)
 
     t0 = time.perf_counter()
     extents, checkpoints = first_pass(a, b, c, segments, seg, rem)
     t1 = time.perf_counter()
-    hists = second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size)
+    hists = second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size, uniform_bins)
     image = hists.sum(axis=0, dtype=np.uint64)
     t2 = time.perf_counter()
     return image, extents, (t1 - t0, t2 - t1)
+
+
+def density_factor(counts, extents):
+    # Probability density = counts * factor = counts / (N * dx * dy). Only valid for the
+    # uniform-bin mode. N is the number of points in the grid (== n, since the extents were
+    # taken from the very same orbit). Integrating the result over the area gives exactly 1.
+    min_x, max_x, min_y, max_y = extents
+    h, w = counts.shape
+    dx, dy = (max_x - min_x) / w, (max_y - min_y) / h
+    return 1.0 / (int(counts.sum()) * dx * dy)
 
 
 def warm_up():
@@ -220,16 +249,23 @@ def make_norm(image, scale):
     return mcolors.Normalize(vmin=0, vmax=max_hit)
 
 
-def colorbar(fig, ax, img, norm, scale):
+def colorbar(fig, ax, img, norm, scale, factor=None):
     cbar = fig.colorbar(img, ax=ax, location='bottom')
-    cbar.set_label(f'Pixel Density (scale: {scale}, 0 - max)')
-    # Ticks evenly spaced on the *colour bar* (not in hit counts), labelled with the hit count.
+    # Ticks evenly spaced on the *colour bar* (not in hit counts).
     ticks = norm.inverse(np.linspace(0.0, 1.0, 8))
-    labels = np.rint(ticks).astype(np.int64)
-    _, keep = np.unique(labels, return_index=True)  # drop duplicate labels (tiny max counts)
-    keep = np.sort(keep)
-    cbar.set_ticks(ticks[keep])
-    cbar.set_ticklabels([f'{int(v):,}' for v in labels[keep]])
+    if factor is None:
+        cbar.set_label(f'Pixel Density (scale: {scale}, 0 - max)')
+        labels = np.rint(ticks).astype(np.int64)
+        _, keep = np.unique(labels, return_index=True)  # drop duplicate labels (tiny max counts)
+        keep = np.sort(keep)
+        ticks = ticks[keep]
+        texts = [f'{int(v):,}' for v in labels[keep]]
+    else:
+        # Density = counts * factor: a pure unit change of the colour bar, nothing is re-binned.
+        cbar.set_label(f'Probability density per unit area (scale: {scale})')
+        texts = [f'{t * factor:.3g}' for t in ticks]
+    cbar.set_ticks(ticks)
+    cbar.set_ticklabels(texts)
 
 
 def render_trajectory_image(image, extents, params, color_map, norm):
@@ -238,10 +274,10 @@ def render_trajectory_image(image, extents, params, color_map, norm):
     img = ax.imshow(image, origin='lower', cmap=color_map, norm=norm, extent=extents,
                     interpolation='none')
 
-    title = (f'Hopalong Pixel-Based Density Heatmap\n'
+    title = (f'Hopalong Attractor@ratwolf@2024\n'
              f'Params: a={params["a"]}, b={params["b"]}, c={params["c"]}, n={params["n"]:_}')
     setup_plot(ax, title, 'X (Cartesian)', 'Y (Cartesian)')
-    colorbar(fig, ax, img, norm, params['scale'])
+    colorbar(fig, ax, img, norm, params['scale'], params.get('factor'))
 
     plt.tight_layout()
     plt.show()
@@ -250,6 +286,8 @@ def render_trajectory_image(image, extents, params, color_map, norm):
 def save_png(image, params, color_map, norm, directory=OUTPUT_DIR):
     # Raw picture only (no axes / colour bar), one image pixel per grid cell, like the Rust version.
     suffix = '' if params['scale'] == 'linear' else f'_{params["scale"]}'
+    if params.get('output') == 'density':
+        suffix += '_density'
     name = (f'py_num={params["n"]}_a={params["a"]}_b={params["b"]}_c={params["c"]}{suffix}.png')
     try:
         os.makedirs(directory, exist_ok=True)
@@ -281,11 +319,18 @@ def main(image_size=(1000, 1000), color_map='hot'):
 
         # Wall-clock time: process_time() would add up the CPU time of ALL threads.
         start = time.perf_counter()
+        density_mode = params['output'] == 'density'
         image, extents, pass_times = compute_trajectory_image(
-            params['a'], params['b'], params['c'], params['n'], image_size)
+            params['a'], params['b'], params['c'], params['n'], image_size,
+            uniform_bins=density_mode)
         wall = time.perf_counter() - start
 
         display_resource_usage(wall, pass_times)
+        if density_mode:
+            params['factor'] = density_factor(image, extents)
+            h, w = image.shape
+            cell = (extents[1] - extents[0]) / w * (extents[3] - extents[2]) / h
+            print(f'Check: sum(density) * cell area = {(image * params["factor"]).sum() * cell:.6f}')
 
         norm = make_norm(image, params['scale'])
         save_png(image, params, color_map, norm)
