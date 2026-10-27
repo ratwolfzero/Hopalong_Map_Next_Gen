@@ -1,6 +1,6 @@
-# Hopalong Attractor – fast, parallel, low-memory
+# Hopalong Map – fast, parallel, low-memory
 
-Draws the **Hopalong attractor** (Barry Martin's map) from hundreds of millions or even billions of points, using all CPU cores, **with memory that does not grow with the number of points**.
+Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or even billions of points, using all CPU cores, **with memory that does not grow with the number of points**.
 
 - **Exact:** the picture is bit-for-bit identical to a plain, single-threaded implementation – and identical on a laptop and on a 64-core server.
 - **Fast:** all cores are used, and each core is kept busier than in a naive loop.
@@ -11,7 +11,7 @@ Draws the **Hopalong attractor** (Barry Martin's map) from hundreds of millions 
 
 ## Contents
 
-- [Hopalong Attractor – fast, parallel, low-memory](#hopalong-attractor--fast-parallel-low-memory)
+- [Hopalong Map – fast, parallel, low-memory](#hopalong-map--fast-parallel-low-memory)
   - [Contents](#contents)
   - [Quick start](#quick-start)
   - [The Hopalong map](#the-hopalong-map)
@@ -236,7 +236,7 @@ Two points are worth stressing:
 
 ### What the density option is not
 
-- **Not the exact density of the attractor.** It is a *histogram estimate* on a 1000 × 1000 grid. For many parameter sets the points pile up on thin curves and rings; for such patterns the density value in a cell depends on how large the cell is, and a finer grid gives higher values on the curves. There may be no resolution-independent "true" value to converge to. A larger `n` reduces the noise (cells with few hits are noisy), but it does not remove the dependence on the cell size.
+- **Not the exact density of the map.** It is a *histogram estimate* on a 1000 × 1000 grid. For many parameter sets the points pile up on thin curves and rings; for such patterns the density value in a cell depends on how large the cell is, and a finer grid gives higher values on the curves. There may be no resolution-independent "true" value to converge to. A larger `n` reduces the noise (cells with few hits are noisy), but it does not remove the dependence on the cell size.
 - **Not a probability per pixel.** It is a probability *per unit area*. The probability that a point falls into one cell is `n_ij / N`, which is the density multiplied by the cell area:
 
 $$
