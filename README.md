@@ -1,5 +1,7 @@
 # Hopalong Orbit Visualizer & Density Estimator (Python)
 
+> under Development!
+> >
 > **Despite its common name, Hopalong is not an attractor.**
 > The map preserves area (Jacobian determinant 1), so nothing contracts onto an attracting set; the familiar picture is the footprint of a single orbit from (0, 0), and other starting points can give different pictures.
 
