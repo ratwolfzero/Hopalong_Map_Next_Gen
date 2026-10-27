@@ -55,7 +55,8 @@ def validate_input(prompt, input_type=float, check_positive_non_zero=False, min_
                 raise ValueError(f'The value must be at least {min_value}.')
             return value
         except ValueError as e:
-            print(f'Invalid input. Please enter a valid {input_type.__name__} value. ({e})')
+            print(
+                f'Invalid input. Please enter a valid {input_type.__name__} value. ({e})')
 
 
 def validate_attractor_parameters(a, b, c):
@@ -78,9 +79,12 @@ def get_attractor_parameters():
     b = validate_input('Enter a float value for "b": ')
     c = validate_input('Enter a float value for "c": ')
     a, b, c = validate_attractor_parameters(a, b, c)
-    n = validate_input('Enter a positive integer value > 1000 for "n": ', int, True, 1000)
-    scale = validate_choice('Colour scale (linear / sqrt / log) [linear]: ', SCALES, 'linear')
-    output = validate_choice('Colour bar shows (counts / density) [counts]: ', OUTPUTS, 'counts')
+    n = validate_input(
+        'Enter a positive integer value > 1000 for "n": ', int, True, 1000)
+    scale = validate_choice(
+        'Colour scale (linear / sqrt / log) [linear]: ', SCALES, 'linear')
+    output = validate_choice(
+        'Colour bar shows (counts / density) [counts]: ', OUTPUTS, 'counts')
     return {'a': a, 'b': b, 'c': c, 'n': n, 'scale': scale, 'output': output}
 
 
@@ -94,7 +98,8 @@ def get_attractor_parameters():
 
 def make_plan(n):
     if n >= PARALLEL_THRESHOLD:
-        tasks = max(2 * get_num_threads(), -(-n // MAX_POINTS_PER_TASK))  # 2x threads, ceil-div
+        # 2x threads, ceil-div
+        tasks = max(2 * get_num_threads(), -(-n // MAX_POINTS_PER_TASK))
     else:
         tasks = 1
     segments = tasks * LANES
@@ -113,7 +118,8 @@ def first_pass(a, b, c, segments, seg, rem):
     checkpoints = np.empty((segments, 2))
     x = 0.0
     y = 0.0
-    min_x = max_x = 0.0  # (0, 0) is the first orbit point, so it is a valid starting value
+    # (0, 0) is the first orbit point, so it is a valid starting value
+    min_x = max_x = 0.0
     min_y = max_y = 0.0
 
     for k in range(segments):
@@ -204,7 +210,8 @@ def compute_trajectory_image(a, b, c, n, image_size, uniform_bins=False):
     t0 = time.perf_counter()
     extents, checkpoints = first_pass(a, b, c, segments, seg, rem)
     t1 = time.perf_counter()
-    hists = second_pass(a, b, c, tasks, seg, rem, checkpoints, extents, image_size, uniform_bins)
+    hists = second_pass(a, b, c, tasks, seg, rem, checkpoints,
+                        extents, image_size, uniform_bins)
     image = hists.sum(axis=0, dtype=np.uint64)
     t2 = time.perf_counter()
     return image, extents, (t1 - t0, t2 - t1)
@@ -256,7 +263,8 @@ def colorbar(fig, ax, img, norm, scale, factor=None):
     if factor is None:
         cbar.set_label(f'Pixel Density (scale: {scale}, 0 - max)')
         labels = np.rint(ticks).astype(np.int64)
-        _, keep = np.unique(labels, return_index=True)  # drop duplicate labels (tiny max counts)
+        # drop duplicate labels (tiny max counts)
+        _, keep = np.unique(labels, return_index=True)
         keep = np.sort(keep)
         ticks = ticks[keep]
         texts = [f'{int(v):,}' for v in labels[keep]]
@@ -288,12 +296,14 @@ def save_png(image, params, color_map, norm, directory=OUTPUT_DIR):
     suffix = '' if params['scale'] == 'linear' else f'_{params["scale"]}'
     if params.get('output') == 'density':
         suffix += '_density'
-    name = (f'py_num={params["n"]}_a={params["a"]}_b={params["b"]}_c={params["c"]}{suffix}.png')
+    name = (
+        f'py_num={params["n"]}_a={params["a"]}_b={params["b"]}_c={params["c"]}{suffix}.png')
     try:
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, name)
         rgba = plt.get_cmap(color_map)(norm(image))
-        plt.imsave(path, rgba, origin='lower')  # row 0 = bottom, as in imshow(origin='lower')
+        # row 0 = bottom, as in imshow(origin='lower')
+        plt.imsave(path, rgba, origin='lower')
         print(f'Image saved to: {path}')
         return path
     except OSError as e:
@@ -329,8 +339,10 @@ def main(image_size=(1000, 1000), color_map='hot'):
         if density_mode:
             params['factor'] = density_factor(image, extents)
             h, w = image.shape
-            cell = (extents[1] - extents[0]) / w * (extents[3] - extents[2]) / h
-            print(f'Check: sum(density) * cell area = {(image * params["factor"]).sum() * cell:.6f}')
+            cell = (extents[1] - extents[0]) / w * \
+                (extents[3] - extents[2]) / h
+            print(
+                f'Check: sum(density) * cell area = {(image * params["factor"]).sum() * cell:.6f}')
 
         norm = make_norm(image, params['scale'])
         save_png(image, params, color_map, norm)
