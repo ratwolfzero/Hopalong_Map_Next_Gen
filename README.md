@@ -10,10 +10,12 @@
 The Hopalong sequence is a classic mathematical formula that generates intricate, organic patterns when plotted over millions of steps. It is defined by the following recursive system:
 
 $$
+\large
 \begin{cases}
-x_{n+1} = y_n - \text{sgn}(x_n) \sqrt{\lvert b x_n - c \rvert} \\[6pt]
+x_{n+1} = y_n - \text{sgn}(x_n) \sqrt{\lvert b x_n - c \rvert} \\
 y_{n+1} = a - x_n
 \end{cases}
+\large
 $$
 
 Where:
@@ -54,9 +56,9 @@ To solve this bottleneck without consuming gigabytes of memory, both high-perfor
 This project offers two distinct implementations leveraging the same high-speed checkpoint backbone:
 
 | Feature / Metric | Pixel-Based Density (`hopalong_fast.py`) | True Density Histogram (`hopalong_fast_histogram.py`) |
-| --- | --- | --- |
-| **Output Values** | Discrete integer hit counts ($\mathbb{N}_0$) per pixel | Continuous float values ($\mathbb{R}^+$) representing normalized probability density |
-| **Mathematical Formula** | $\text{Hit Count}_{u,v} = \sum \text{Hits}$ | $\text{Density}_{u,v} = \frac{\text{Raw Hits}_{u,v}}{N \cdot (\Delta x \cdot \Delta y)}$ |
+| :--- | :--- | :--- |
+| **Output Values** | Discrete integer hit counts (N₀) per pixel | Continuous float values (R⁺) representing normalized probability density |
+| **Mathematical Formula** | `Hit Count = Σ Hits` | `Density = Raw Hits / (N * Δx * Δy)` |
 | **Primary Use Case** | Fast visual exploration, artistic rendering, and qualitative analysis | Scientific data analysis, quantitative comparisons, information entropy, and probability modeling |
 | **Execution Speed** | Ultra-fast (multi-core parallel) | Virtually identical (adds a single post-processing normalization step) |
 | **Visual Appearance** | Identical to human eye | Identical to human eye |
