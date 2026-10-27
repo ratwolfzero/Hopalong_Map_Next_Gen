@@ -282,7 +282,7 @@ def render_trajectory_image(image, extents, params, color_map, norm):
     img = ax.imshow(image, origin='lower', cmap=color_map, norm=norm, extent=extents,
                     interpolation='none')
 
-    title = (f'Hopalong Attractor@ratwolf@2024\n'
+    title = (f'Hopalong Map@ratwolf@2026\n'
              f'Params: a={params["a"]}, b={params["b"]}, c={params["c"]}, n={params["n"]:_}')
     setup_plot(ax, title, 'X (Cartesian)', 'Y (Cartesian)')
     colorbar(fig, ax, img, norm, params['scale'], params.get('factor'))
