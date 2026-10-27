@@ -38,7 +38,7 @@ Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or eve
 
 ## Quick start
 
-**Requirements:** Python 3 (developed with 3.12), `numpy`, `numba`, `matplotlib`. Works on macOS and Linux (the memory read-out uses the Unix-only `resource` module; on Windows remove `display_resource_usage`).
+**Requirements:** Python 3 (developed with 3.15), `numpy`, `numba`, `matplotlib`. Works on macOS and Linux (the memory read-out uses the Unix-only `resource` module; on Windows remove `display_resource_usage`).
 
 ```bash
 pip install numpy numba matplotlib
