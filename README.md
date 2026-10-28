@@ -100,6 +100,8 @@ Two facts about this map drive the whole design:
 1. **It is strictly serial.** Point number 1,000,000 cannot be computed without first computing points 1 to 999,999. You cannot simply hand different parts of the orbit to different CPU cores.
 2. **It is deterministic.** The same `(x, y)` always leads to the same next point. There is no randomness. If you know where you are, you know everything that follows.
 
+**A note on "map" versus "attractor".** The Hopalong map is often called an attractor, but it does not pull orbits in from elsewhere. Away from the lines `x = 0` and `b * x = c`, its Jacobian determinant (the factor by which the map stretches areas) is exactly 1, so the map **preserves area**. Orbits therefore stay in regions that are determined by where they start. In a quick test with random start points on three parameter sets, the resulting pictures overlapped the picture from `(0, 0)` by at most about 50 %, often much less. **The picture is the orbit from `(0, 0)`, not a property of `a`, `b` and `c` alone.** That is why the exact orbit is replayed from checkpoints, instead of starting the segments at independent random points.
+
 ---
 
 ## The general approach (checkpoints and segments)
@@ -132,7 +134,7 @@ Think of the orbit as a very long hiking trail where each step depends on the pr
    worker 1:  walks segments 0-3    -> marks its own tally sheet 1 --+
    worker 2:  walks segments 4-7    -> marks its own tally sheet 2 --+
    worker 3:  walks segments 8-11   -> marks its own tally sheet 3 --+--> add up all
-   ...                                                                    tally sheets
+   ...                                                               |    tally sheets
    worker k:  walks segments ...    -> marks its own tally sheet k --+        |
                                                                               v
                                                                        final picture
@@ -176,7 +178,7 @@ The counters of a tally sheet are 4-byte numbers, which overflow at about 4.3 bi
 
 ### Lanes: keeping each core busy
 
-Each step needs the result of the previous step, including a square root, which takes the CPU a moment. A core working on one chain of steps spends part of its time waiting. So each task works on **four consecutive segments in lock-step** ("lanes"): while the CPU waits for the square root of lane 1, it already works on lanes 2, 3 and 4. This uses no extra cores, it just makes each core busier. In the benchmark below this makes pass 2 about three times faster *per core*.
+Each step needs the result of the previous step, including a square root, which takes the CPU a moment. A core working on one chain of steps spends part of its time waiting. So each task works on **four consecutive segments in lock-step** ("lanes"): while the CPU waits for the square root of lane 1, it already works on lanes 2, 3 and 4. This uses no extra cores, it just makes each core busier. In the benchmark below this makes pass 2 roughly twice as fast *per core* (the gain depends on the CPU).
 
 ### Where the time goes
 
@@ -245,7 +247,7 @@ $$
 P_{ij} = \frac{n_{ij}}{N} = \rho_{ij}\,\Delta x\,\Delta y
 $$
 
-- **Not independent random samples.** The points come from one deterministic orbit and are strongly correlated. The numbers describe how often *this* orbit, started at `(0, 0)`, visits each cell. Textbook error estimates for independent samples (such as the square root of the count) are only a rough guide here.
+- **Not independent random samples.** The points come from one deterministic orbit and are strongly correlated. The numbers describe how often *this* orbit, started at `(0, 0)`, visits each cell; since the map preserves area (see [The Hopalong map](#the-hopalong-map)), other start points give different pictures. Textbook error estimates for independent samples (such as the square root of the count) are only a rough guide here.
 - **Not smoothed.** There is no kernel density estimate and no blurring; every cell holds the raw tally.
 - **Not normalised to a maximum of 1.** The numbers on the colour bar are real density values. Only the *colours* are scaled relative to the busiest cell.
 - **Not affected by the colour scale.** `sqrt` and `log` change which colour a value gets, never the numbers on the colour bar.
@@ -346,15 +348,15 @@ Other knobs:
 Checks that were run during development:
 
 - **Counts mode vs. the original simple two-pass script:** the extents and the complete 1000 × 1000 image are **bit-for-bit identical** for four different parameter sets, including values of `n` that do not divide evenly into segments and runs with several tasks.
-- **Density mode vs. `numpy.histogram2d(..., density=True)`:** with 2 to 3 million points on three parameter sets, **no cell differs** in its count, the densities agree to rounding level (about 1e-14), and the integral is 1.000000.
-- **Colour scales:** the saved PNGs were compared with the three formulas above (grey colour map) and agree within 8-bit rounding; the orientation (y pointing up) was checked at the same time.
+- **Density mode vs. `numpy.histogram2d(..., density=True)`:** with 2 to 3 million points on three parameter sets, **no cell differs** in its count, the densities agree to floating-point rounding (relative difference about 1e-13), and the integral is 1.000000.
+- **Colour scales:** the saved PNGs were compared with the three formulas above (using a grey colour map) and agree to within two grey levels out of 255, which is the rounding of a 256-entry colour map and 8-bit PNG; the orientation (y pointing up) was checked at the same time.
 
-Speed, 100 million points, **one thread** on a single-core Linux machine (more cores shrink pass 2 further):
+Speed, 100 million points, **one thread** on a single-core Linux machine, median of three runs (more cores shrink pass 2 further; timings on a shared machine vary by roughly 10 to 20 %):
 
 | | Pass 1 | Pass 2 | Total |
 | --- | --- | --- | --- |
-| Plain two-pass numba loop | 1.19 s | 1.33 s | 2.52 s |
-| `hopalong_fast.py` | 1.15 s | 0.45 s | 1.60 s |
+| Plain two-pass numba loop | 1.07 s | 1.03 s | 2.10 s |
+| `hopalong_fast.py` | 1.04 s | 0.49 s | 1.53 s |
 
 Memory, density histogram of the same orbit:
 
@@ -367,7 +369,7 @@ Memory, density histogram of the same orbit:
 
 ## Limitations and notes
 
-- **Pass 1 is serial.** That is the floor for the total time; see [Where the time goes](#where-the-time-goes).
+- **Pass 1 is serial.** That is the floor for the total time; see [Where the time goes](#where-the-time-goes). It cannot simply be skipped by starting segments at independent random points, because the picture depends on the start point (see [The Hopalong map](#the-hopalong-map)).
 - **First start compiles.** numba compiles the kernels on first use (a few seconds) and caches them in `__pycache__`.
 - **Not independent samples, and not a continuous density.** See [What the density option is not](#what-the-density-option-is-not).
 - **Extreme parameters.** If the orbit overflows to infinity or NaN, the extents and the picture are meaningless.
