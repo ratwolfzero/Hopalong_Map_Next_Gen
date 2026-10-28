@@ -56,7 +56,7 @@ The script asks for six things:
 | Colour scale | `linear` (default), `sqrt` or `log` – see [Colour scales](#colour-scales). |
 | Colour bar shows | `counts` (default) or `density` – see [Counts vs. density](#counts-vs-density). |
 
-Example session (times and memory will differ on your machine; this one was run on a Apple MacMini M2):
+Example session (times and memory will differ on your machine; this one was run on an Apple MacMini M2):
 
 ```text
 Enter a float value for "a": -3.14
