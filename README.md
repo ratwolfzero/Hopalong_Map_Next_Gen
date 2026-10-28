@@ -359,7 +359,7 @@ Speed, 100,000,000 points, parameters a = 0.4, b = 1.0, c = 0.0, 1000 × 1000 gr
 
 | | Pass 1 | Pass 2 | Total |
 | --- | --- | --- | --- |
-| Plain two-pass numba loop (single-threaded) | 0.80 s | 0.82 s | 1.62 s |
+| Plain two-pass numba loop (single-threaded -->"hopalong_basic.py") | 0.80 s | 0.82 s | 1.62 s |
 | `hopalong_fast.py`, 1 thread | 0.81 s | 0.22 s | 1.02 s |
 | `hopalong_fast.py`, 8 threads | 0.81 s | 0.06 s | 0.87 s |
 
