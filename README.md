@@ -56,7 +56,7 @@ The script asks for six things:
 | Colour scale | `linear` (default), `sqrt` or `log` – see [Colour scales](#colour-scales). |
 | Colour bar shows | `counts` (default) or `density` – see [Counts vs. density](#counts-vs-density). |
 
-Example session (times and memory will differ on your machine; this one was run on a single thread):
+Example session (times and memory will differ on your machine; this one was run on a Apple MacMini M2):
 
 ```text
 Enter a float value for "a": -3.14
@@ -65,12 +65,12 @@ Enter a float value for "c": 0.3
 Enter a positive integer value > 1000 for "n": 1e8
 Colour scale (linear / sqrt / log) [linear]: sqrt
 Colour bar shows (counts / density) [counts]: density
-Pass 1 (extents + checkpoints, serial): 1.07 s
-Pass 2 (parallel plot):                 0.48 s
-Wall-clock time (compute): 1.55 s
-Memory (RAM): 190.09 MByte used (peak)
+Pass 1 (extents + checkpoints, serial): 0.81 s
+Pass 2 (parallel plot):                 0.08 s
+Wall-clock time (compute): 0.89 s
+Memory (RAM): 221.25 MByte used (peak)
 Check: sum(density) * cell area = 1.000000
-Image saved to: <OUTPUT_DIR>/py_num=100000000_a=-3.14_b=0.3_c=0.3_sqrt_density.png
+Image saved to: /Users/ralf/Projects/hopalong_pictures/py_num=100000000_a=-3.14_b=0.3_c=0.3_sqrt_density.png
 ```
 
 Then a window opens with the picture, and a PNG is written to `OUTPUT_DIR`. **Change `OUTPUT_DIR` at the top of the script to a folder that exists on your machine.** The PNG is the raw 1000 × 1000 picture without axes; the file name encodes the parameters, the colour scale (`_sqrt`, `_log`) and the mode (`_density`).
