@@ -4,9 +4,9 @@
 
 Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or even billions of points, using all CPU cores, **with memory that does not grow with the number of points**.
 
-- **Exact:** the picture is bit-for-bit identical to a plain, single-threaded implementation – and identical on a laptop and on a 64-core server.
+- **Exact:** the picture is bit-for-bit identical to a plain, single-threaded implementation, and identical for any number of threads (checked with 1 and 8).
 - **Fast:** all cores are used, and each core is kept busier than in a naive loop.
-- **Small:** a billion points need the same few megabytes as a thousand points.
+- **Small:** memory stays fixed however many points you compute (about 76 MB on an 8-thread machine, on top of Python and its libraries).
 - **Two output flavours:** *counts* (hits per pixel) or a proper *probability density* on the colour bar.
 - **Three colour scales:** linear, square root, logarithmic.
 - Interactive window (matplotlib) plus PNG export.
@@ -70,14 +70,14 @@ Pass 2 (parallel plot):                 0.08 s
 Wall-clock time (compute): 0.89 s
 Memory (RAM): 221.25 MByte used (peak)
 Check: sum(density) * cell area = 1.000000
-Image saved to: /Users/ralf/Projects/hopalong_pictures/py_num=100000000_a=-3.14_b=0.3_c=0.3_sqrt_density.png
+Image saved to: <OUTPUT_DIR>/py_num=100000000_a=-3.14_b=0.3_c=0.3_sqrt_density.png
 ```
 
 Then a window opens with the picture, and a PNG is written to `OUTPUT_DIR`. **Change `OUTPUT_DIR` at the top of the script to a folder that exists on your machine.** The PNG is the raw 1000 × 1000 picture without axes; the file name encodes the parameters, the colour scale (`_sqrt`, `_log`) and the mode (`_density`).
 
 The first start takes a few seconds because numba compiles the kernels; they are cached on disk afterwards.
 
-The "Memory" line is the peak of the whole Python process, including Python, numba and matplotlib themselves (roughly 150 to 200 MB before anything is computed).
+The "Memory" line is the peak of the whole Python process, including Python, numba and matplotlib themselves (roughly 150 MB before anything is computed).
 
 ---
 
@@ -100,7 +100,7 @@ Two facts about this map drive the whole design:
 1. **It is strictly serial.** Point number 1,000,000 cannot be computed without first computing points 1 to 999,999. You cannot simply hand different parts of the orbit to different CPU cores.
 2. **It is deterministic.** The same `(x, y)` always leads to the same next point. There is no randomness. If you know where you are, you know everything that follows.
 
-**A note on "map" versus "attractor".** The Hopalong map is often called an attractor, but it does not pull orbits in from elsewhere. Away from the lines `x = 0` and `b * x = c`, its Jacobian determinant (the factor by which the map stretches areas) is exactly 1, so the map **preserves area**. Orbits therefore stay in regions that are determined by where they start. In a quick test with random start points on three parameter sets, the resulting pictures overlapped the picture from `(0, 0)` by at most about 50 %, often much less. **The picture is the orbit from `(0, 0)`, not a property of `a`, `b` and `c` alone.** That is why the exact orbit is replayed from checkpoints, instead of starting the segments at independent random points.
+**A note on "map" versus "attractor".** The Hopalong map is often called an attractor, but it does not pull orbits in from elsewhere. Away from the lines `x = 0` and `b * x = c`, its Jacobian determinant (the factor by which the map stretches areas) is exactly 1, so the map **preserves area**. You can check this by hand: the new `x` changes with `y` at slope 1, and the new `y` changes with `x` at slope -1 and does not depend on `y`, so the determinant is 1. Orbits therefore stay in regions that are determined by where they start, and different start points generally give different pictures. **The picture is the orbit from `(0, 0)`, not a property of `a`, `b` and `c` alone.** That is why the exact orbit is replayed from checkpoints, instead of starting the segments at independent random points.
 
 ---
 
@@ -178,14 +178,14 @@ The counters of a tally sheet are 4-byte numbers, which overflow at about 4.3 bi
 
 ### Lanes: keeping each core busy
 
-Each step needs the result of the previous step, including a square root, which takes the CPU a moment. A core working on one chain of steps spends part of its time waiting. So each task works on **four consecutive segments in lock-step** ("lanes"): while the CPU waits for the square root of lane 1, it already works on lanes 2, 3 and 4. This uses no extra cores, it just makes each core busier. In the benchmark below this makes pass 2 roughly twice as fast *per core* (the gain depends on the CPU).
+Each step needs the result of the previous step, including a square root, which takes the CPU a moment. A core working on one chain of steps spends part of its time waiting. So each task works on **four consecutive segments in lock-step** ("lanes"): while the CPU waits for the square root of lane 1, it already works on lanes 2, 3 and 4. This uses no extra cores, it just makes each core busier. In the benchmark below this makes pass 2 about 3.7 times faster *per core* (0.82 s down to 0.22 s on an Apple M2; the gain depends on the CPU).
 
 ### Where the time goes
 
 - Pass 1 is serial: it costs roughly as much as the walk itself.
 - Pass 2 is parallel: its time shrinks with the number of cores.
 
-So the total time is roughly `pass 1 + pass 2 / number of cores`. Beyond a handful of cores, pass 1 dominates, and extra cores no longer help much. The script prints both times so you can see this.
+So the total time is roughly `pass 1 + pass 2 / number of cores`. Beyond a handful of cores, pass 1 dominates, and extra cores no longer help much. The script prints both times so you can see this. On an 8-thread Apple M2, pass 1 takes 0.81 s of the 0.87 s total (see the benchmark below).
 
 ---
 
@@ -203,7 +203,7 @@ $$
 \mathrm{column} = \mathrm{round}\!\left(\frac{(x - x_{\min})\,(W-1)}{x_{\max} - x_{\min}}\right)
 $$
 
-(rows work the same way with `y` and `H`). This reproduces the output of the original simple script exactly. It has one property that makes it unsuitable for a density: the first and last row and column only collect points from half a pixel, so they are only half as wide as all other cells.
+(rows work the same way with `y` and `H`). This reproduces the output of the plain single-threaded two-pass implementation exactly. It has one property that makes it unsuitable for a density: the first and last row and column only collect points from half a pixel, so they are only half as wide as all other cells.
 
 ### Density
 
@@ -304,7 +304,7 @@ np.save("density.npy", density)
 
 - `counts` is an unsigned 64-bit array of shape `(rows, columns)` = `(y, x)`. Row 0 is the **lowest** y value. `numpy.histogram2d` returns shape `(x, y)`, so compare with `density.T`.
 - `extents` is `(x_min, x_max, y_min, y_max)`. The cell edges are `np.linspace(x_min, x_max, columns + 1)` and `np.linspace(y_min, y_max, rows + 1)`.
-- With `uniform_bins=False` (the default) you get the pixel-mode counts of the original script.
+- With `uniform_bins=False` (the default) you get the pixel-mode counts of the plain single-threaded two-pass implementation.
 
 ---
 
@@ -345,19 +345,21 @@ Other knobs:
 
 ## Verification and benchmarks
 
-Measured on: Apple M2, 8 threads, 8 GB RAM, Darwin 27.2.0, Python 3.15.1, numpy 2.5.4, numba 0.68.0.
+Measured on: Apple M2, 8 threads, 8 GB RAM, macOS (Darwin 27.2.0), Python 3.15.1, numpy 2.5.4, numba 0.68.0.
 
-Checks that were run during development:
+All numbers in this section are produced by `bench_readme.py`; run `python bench_readme.py` to reproduce them (add `--big` for the 100-million-point memory test).
 
-- **Counts mode vs. the original simple two-pass script:** the extents and the complete 1000 × 1000 image are **bit-for-bit identical** for 4 different parameter sets, including values of `n` that do not divide evenly into segments and runs with several tasks.
+Checks:
+
+- **Counts mode vs. the plain single-threaded two-pass implementation:** the extents and the complete 1000 × 1000 image are **bit-for-bit identical** for 4 different parameter sets, including values of `n` that do not divide evenly into segments and runs with several tasks.
 - **Density mode vs. `numpy.histogram2d(..., density=True)`:** with 2 to 3 million points on 3 parameter sets, **no cell differs** in its count, the densities agree to floating-point rounding (relative difference about 2e-13), and the integral is within 5e-14 of 1.
 - **Colour scales:** the saved PNGs were compared with the three formulas above (using a grey colour map) and agree to within 2 grey levels out of 255, which is the rounding of a 256-entry colour map and 8-bit PNG; the orientation (y pointing up) was checked at the same time.
 
-Speed, 100,000,000 points, parameters a = 0.4, b = 1.0, c = 0.0, 1000 × 1000 grid, median of 3 runs. The plain loop always runs on one core, but its speed still depends on the CPU, so it was measured on this machine too:
+Speed, 100,000,000 points, parameters a = 0.4, b = 1.0, c = 0.0, 1000 × 1000 grid, median of 3 runs. Both versions were timed on this machine in the same session; the plain loop is single-threaded:
 
 | | Pass 1 | Pass 2 | Total |
 | --- | --- | --- | --- |
-| Plain two-pass numba loop (1 core by nature) | 0.80 s | 0.82 s | 1.62 s |
+| Plain two-pass numba loop (single-threaded) | 0.80 s | 0.82 s | 1.62 s |
 | `hopalong_fast.py`, 1 thread | 0.81 s | 0.22 s | 1.02 s |
 | `hopalong_fast.py`, 8 threads | 0.81 s | 0.06 s | 0.87 s |
 
@@ -365,7 +367,7 @@ Memory, density histogram of the same orbit (extra peak RAM on top of what the i
 
 | | Extra peak RAM, 20,000,000 points | 100,000,000 points |
 | --- | --- | --- |
-| Generate the points into arrays, then `numpy.histogram2d` | 1.1 GB | skipped: would need about 6 GB, machine has 8 GB |
+| Generate the points into arrays, then `numpy.histogram2d` | 1.1 GB | not run (estimated at about 6 GB) |
 | `hopalong_fast.py` | 76 MB | 76 MB |
 
 ---
