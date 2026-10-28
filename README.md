@@ -345,25 +345,28 @@ Other knobs:
 
 ## Verification and benchmarks
 
+Measured on: Apple M2, 8 threads, 8 GB RAM, Darwin 27.2.0, Python 3.15.1, numpy 2.5.4, numba 0.68.0.
+
 Checks that were run during development:
 
-- **Counts mode vs. the original simple two-pass script:** the extents and the complete 1000 × 1000 image are **bit-for-bit identical** for four different parameter sets, including values of `n` that do not divide evenly into segments and runs with several tasks.
-- **Density mode vs. `numpy.histogram2d(..., density=True)`:** with 2 to 3 million points on three parameter sets, **no cell differs** in its count, the densities agree to floating-point rounding (relative difference about 1e-13), and the integral is 1.000000.
-- **Colour scales:** the saved PNGs were compared with the three formulas above (using a grey colour map) and agree to within two grey levels out of 255, which is the rounding of a 256-entry colour map and 8-bit PNG; the orientation (y pointing up) was checked at the same time.
+- **Counts mode vs. the original simple two-pass script:** the extents and the complete 1000 × 1000 image are **bit-for-bit identical** for 4 different parameter sets, including values of `n` that do not divide evenly into segments and runs with several tasks.
+- **Density mode vs. `numpy.histogram2d(..., density=True)`:** with 2 to 3 million points on 3 parameter sets, **no cell differs** in its count, the densities agree to floating-point rounding (relative difference about 2e-13), and the integral is within 5e-14 of 1.
+- **Colour scales:** the saved PNGs were compared with the three formulas above (using a grey colour map) and agree to within 2 grey levels out of 255, which is the rounding of a 256-entry colour map and 8-bit PNG; the orientation (y pointing up) was checked at the same time.
 
-Speed, 100 million points, **one thread** on a single-core Linux machine, median of three runs (more cores shrink pass 2 further; timings on a shared machine vary by roughly 10 to 20 %):
+Speed, 100,000,000 points, parameters a = 0.4, b = 1.0, c = 0.0, 1000 × 1000 grid, median of 3 runs. The plain loop always runs on one core, but its speed still depends on the CPU, so it was measured on this machine too:
 
 | | Pass 1 | Pass 2 | Total |
 | --- | --- | --- | --- |
-| Plain two-pass numba loop | 1.07 s | 1.03 s | 2.10 s |
-| `hopalong_fast.py` | 1.04 s | 0.49 s | 1.53 s |
+| Plain two-pass numba loop (1 core by nature) | 0.80 s | 0.82 s | 1.62 s |
+| `hopalong_fast.py`, 1 thread | 0.81 s | 0.22 s | 1.02 s |
+| `hopalong_fast.py`, 8 threads | 0.81 s | 0.06 s | 0.87 s |
 
-Memory, density histogram of the same orbit:
+Memory, density histogram of the same orbit (extra peak RAM on top of what the interpreter and the libraries already use; `hopalong_fast.py` with 8 threads = 16 tasks, so at most 16 × 4 MB of tally sheets plus the 8 MB result; the operating system only counts the parts that were actually touched):
 
-| | Extra peak RAM, 20 million points | 100 million points |
+| | Extra peak RAM, 20,000,000 points | 100,000,000 points |
 | --- | --- | --- |
-| Generate the points into arrays, then `numpy.histogram2d` | 1.1 GB | ran out of memory on a 4 GB machine |
-| `hopalong_fast.py` | 23 MB | 23 MB |
+| Generate the points into arrays, then `numpy.histogram2d` | 1.1 GB | skipped: would need about 6 GB, machine has 8 GB |
+| `hopalong_fast.py` | 76 MB | 76 MB |
 
 ---
 
