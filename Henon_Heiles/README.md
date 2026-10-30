@@ -13,17 +13,25 @@ It answers a question from a reader of the Hopalong article: *can this be used w
 
 ## Contents
 
-- [Quick start](#quick-start)
-- [The system](#the-system)
-- [How the method works](#how-the-method-works)
-- [What speed-up to expect](#what-speed-up-to-expect)
-- [Reading the picture](#reading-the-picture)
-- [Chaotic or regular?](#chaotic-or-regular)
-- [When does this make sense?](#when-does-this-make-sense)
-- [Code map](#code-map)
-- [Configuration](#configuration)
-- [Verification](#verification)
-- [Limitations and notes](#limitations-and-notes)
+- [Hénon–Heiles orbit with leapfrog – the two-pass checkpoint method](#hénonheiles-orbit-with-leapfrog--the-two-pass-checkpoint-method)
+  - [Contents](#contents)
+  - [Quick start](#quick-start)
+  - [The system](#the-system)
+    - [Time stepping: leapfrog](#time-stepping-leapfrog)
+  - [How the method works](#how-the-method-works)
+    - [The two passes](#the-two-passes)
+    - [Lanes](#lanes)
+    - [How a point becomes a pixel](#how-a-point-becomes-a-pixel)
+    - [Why the result is exactly the same](#why-the-result-is-exactly-the-same)
+    - [What is special about leapfrog](#what-is-special-about-leapfrog)
+  - [What speed-up to expect](#what-speed-up-to-expect)
+  - [Reading the picture](#reading-the-picture)
+  - [Chaotic or regular?](#chaotic-or-regular)
+  - [When does this make sense?](#when-does-this-make-sense)
+  - [Code map](#code-map)
+  - [Configuration](#configuration)
+  - [Verification](#verification)
+  - [Limitations and notes](#limitations-and-notes)
 
 ---
 
@@ -39,8 +47,8 @@ python henon_heiles_minimal.py
 The script asks nothing. It computes the picture twice: once with a plain serial loop (no segments, no lanes) and once with the parallel method. It compares the two, prints the times, and opens a window with the picture. Output on an Apple Mac mini M2 (8 threads):
 
 ```text
-plain serial loop (no segments, no lanes):       total x.xx s
-16 tasks x 4 lanes, 8 threads: pass 1 x.xx s, pass 2 x.xx s, total x.xx s
+plain serial loop (no segments, no lanes):       total 0.95 s
+16 tasks x 4 lanes, 8 threads: pass 1 0.46 s, pass 2 0.07 s, total 0.53 s
 identical to the serial loop (every pixel and every extent): True
 ```
 
