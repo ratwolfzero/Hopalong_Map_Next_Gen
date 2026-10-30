@@ -1,6 +1,6 @@
 # Hopalong Map – fast, parallel, low-memory – two-pass checkpointed orbit decomposition
 
-![Header Image](Figure_1.png)
+![Header Image](illustrations/header.png)
 
 Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or even billions of points, using all CPU cores, **with memory that does not grow with the number of points**.
 
