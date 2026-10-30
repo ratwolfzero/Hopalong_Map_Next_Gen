@@ -189,7 +189,7 @@ where `t1` is the time of pass 1 and `t2` the time of pass 2 on one core. Measur
 | plain serial loop (no segments, no lanes) | – | – | 0.95 s |
 | 16 tasks × 4 lanes, 8 threads | 0.46 s | 0.07 s | 0.53 s |
 
-Pass 1 can't be skipped, so the total never gets below `t1`. Cores and lanes make pass 2 small, and then pass 1 is what is left. The way to shrink it is a shorter chain of calculations inside the step. That is why the step uses merged kicks and fused multiply-add.
+Pass 1 can't be skipped, so the total never gets below `t1`. Cores and lanes make pass 2 small, and then pass 1 is what is left. The way to shrink it is a shorter chain of calculations inside the step. That is why the step uses merged kicks and fused multiply-add. Both rows use the same step, so the comparison is like for like: the method turns 0.95 s into 0.53 s (1.8 times faster), and the best it could do is about 0.46 s.
 
 ---
 
@@ -276,10 +276,12 @@ Number of threads: set the environment variable `NUMBA_NUM_THREADS`, for example
 
 ## Verification
 
-- **Plain serial loop vs. the parallel method:** on a one-core Linux machine, the image and the extents were bit-identical for all 18 combinations tested: 3 values of n (1,000,003, 5,000,017 and 20,000,001, none divisible by the segment count) times 1, 2, 3, 7, 16 and 32 tasks (4 to 128 segments).
-- **Apple M2, 8 threads, 100,000,003 points, 64 segments:** the `True` line in [Quick start](#quick-start).
-- **Energy:** within 3.2·10⁻⁶ of 0.125 over 10⁸ steps for the default start, 3.6·10⁻⁶ for `Y0 = 0.1`.
-- **Is the test strict enough?** I put a deliberate error in the last digit into the step (`h * 1.0000000000000002` in the drift) and ran the comparison again. It fails for both start points. For the chaotic start, 5.3 % of the hits land in a different pixel and the extents change. For the regular start only 1,851 of 100 million hits move, which you would never see by eye, but the exact pixel-by-pixel comparison still catches it.
+- **Plain serial loop vs. the parallel method (both use the same step):** on a one-core Linux machine, the image and the extents were bit-identical for all 18 combinations tested: 3 values of n (1,000,003, 5,000,017 and 20,000,001, none divisible by the segment count) times 1, 2, 3, 7, 16 and 32 tasks (4 to 128 segments).
+- **Apple M2, 8 threads, 100,000,003 points, 64 segments:** the `True` line in [Quick start](#quick-start). Note what it shows: the reference loop uses the same `step` as the parallel run, so `True` proves that segments, lanes and threads change nothing. It does not check the step formula itself. The energy check below does that.
+- **Energy (checks the step formula):** within 3.2·10⁻⁶ of 0.125 over 10⁸ steps for the default start, 3.6·10⁻⁶ for `Y0 = 0.1`. The tuned step still behaves like a proper leapfrog.
+- **How sensitive is the picture to the step?** I put a deliberate error in the last digit into the step (`h * 1.0000000000000002` in the drift) and compared its picture with the picture of the unmodified script. They differ for both start points. For the chaotic start, 5.3 % of the hits land in a different pixel and the extents change. For the regular start only 1,851 of 100 million hits move, which you would never see by eye. The script's own check cannot see such a change, because both sides use the same step. It only shows up when two versions of the step are compared with each other.
+
+**How this differs from the Hopalong project.** The Hopalong step uses only plain arithmetic, so its picture is bit-for-bit identical to an ordinary single-threaded implementation (`hopalong_basic.py`). Here the step is tuned (merged kicks, fused multiply-add). So the picture is identical to a plain serial loop *that uses the same step*, which is what the script checks. A textbook velocity Verlet written with separate multiplications and additions describes the same physics, but it differs in the last digits, and since the orbit is chaotic, also in the fine speckle of the picture. The Hopalong step does not use fused multiply-add for exactly this reason: it would no longer match the plain implementation.
 
 ---
 
@@ -289,7 +291,6 @@ Number of threads: set the environment variable `NUMBA_NUM_THREADS`, for example
 - **Pixel counters.** Each task counts in 4-byte numbers, which overflow at about 4.3 billion. Keep `n / tasks` below that. (The Hopalong script splits the work into more tasks automatically; this minimal script does not.)
 - **Memory.** One 4-byte pixel grid per task: 16 × 1000 × 1000 × 4 bytes = 64 MB, plus 8 MB for the sum. It does not grow with `n`. The lanes of a task share its grid. (Calculated, not measured.)
 - **Fused multiply-add needs hardware support to be fast.** Apple Silicon and practically every x86 chip of the last ten years have it. Without it the script still gives the same result, but slowly.
-- **Not identical to the first version.** The orbit is the same in exact arithmetic as in `henon_heiles_minimal_v1.py`, but the rounding differs in the last digits. The picture looks the same overall; the fine speckle is different.
 - **Not independent samples.** The points come from one orbit and are strongly related to each other. The picture shows how often *this* orbit visits each pixel.
 - **No `fastmath`.** Both passes must compute bit-identical orbits.
 - **Time step.** `DT = 0.01` is not tuned. A smaller step needs more steps for the same time span.
