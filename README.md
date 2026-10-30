@@ -100,6 +100,8 @@ Two facts about this map drive the whole design:
 1. **It is strictly serial.** Point number 1,000,000 cannot be computed without first computing points 1 to 999,999. You cannot simply hand different parts of the orbit to different CPU cores.
 2. **It is deterministic.** The same `(x, y)` always leads to the same next point. There is no randomness. If you know where you are, you know everything that follows.
 
+![Each state depends on the one before it](illustrations/01_serial_dependency.png)
+
 **A note on "map" versus "attractor".** The Hopalong map is often called an attractor, but it does not pull orbits in from elsewhere. Away from the lines `x = 0` and `b * x = c`, its Jacobian determinant (the factor by which the map stretches areas) is exactly 1, so the map **preserves area**. You can check this by hand: the new `x` changes with `y` at slope 1, and the new `y` changes with `x` at slope -1 and does not depend on `y`, so the determinant is 1. Orbits therefore stay in regions that are determined by where they start, and different start points generally give different pictures. **The picture is the orbit from `(0, 0)`, not a property of `a`, `b` and `c` alone.** That is why the exact orbit is replayed from checkpoints, instead of starting the segments at independent random points.
 
 ---
@@ -124,35 +126,13 @@ Think of the orbit as a very long hiking trail where each step depends on the pr
 1. **Pass 1:** one hiker walks the whole trail once. On the way they note the extreme positions (how big must the map be?) and **plant a flag every so often**. A flag records just the exact position at that spot.
 2. **Pass 2:** now *many* hikers start at the same time, **each at a different flag**, and each walks only the stretch up to the next flag. Because the trail is deterministic, they all take exactly the steps the single hiker would have taken. Each hiker makes tally marks on **their own private tally sheet**, so nobody gets in anybody's way. At the end, the tally sheets are added up.
 
-```text
- PASS 1  -  one worker walks the whole orbit once (serial)
-   |         remembers the smallest and largest x and y   -> how big is the picture?
-   |         plants a flag at the start of every segment  -> a few bytes each
-   v
- PASS 2  -  many workers, all at the same time (parallel)
-
-   worker 1:  walks segments 0-3    -> marks its own tally sheet 1 --+
-   worker 2:  walks segments 4-7    -> marks its own tally sheet 2 --+
-   worker 3:  walks segments 8-11   -> marks its own tally sheet 3 --+--> add up all
-   ...                                                               |    tally sheets
-   worker k:  walks segments ...    -> marks its own tally sheet k --+        |
-                                                                              v
-                                                                       final picture
-```
+![Workers replay segments in parallel and their private histograms are added](illustrations/03_pass2_parallel.png)
 
 ### Checkpoints (flags) and segments
 
 The orbit is cut into consecutive pieces called **segments**. A **checkpoint** is the exact position `(x, y)` at the start of a segment.
 
-```text
-   flag 0        flag 1        flag 2        flag 3        flag 4
-     |             |             |             |             |
-     v             v             v             v             v
-     +-------------+-------------+-------------+-------------+--------- ...
-     |  segment 0  |  segment 1  |  segment 2  |  segment 3  |  segment 4
-     +-------------+-------------+-------------+-------------+--------- ...
-   start (0,0)                                                    the orbit goes on
-```
+![Checkpoints mark the start of each consecutive orbit segment](illustrations/02_pass1_flags.png)
 
 - A worker that starts at flag *k* just keeps computing until it reaches the position stored in flag *k+1*, adding a tally mark for every point on the way.
 - If the number of points does not divide evenly into segments, the leftover points are simply added to the last segment, so every point is visited exactly once.
@@ -179,6 +159,8 @@ The counters of a tally sheet are 4-byte numbers, which overflow at about 4.3 bi
 ### Lanes: keeping each core busy
 
 Each step needs the result of the previous step, including a square root, which takes the CPU a moment. A core working on one chain of steps spends part of its time waiting. So each task works on **four consecutive segments in lock-step** ("lanes"): while the CPU waits for the square root of lane 1, it already works on lanes 2, 3 and 4. This uses no extra cores, it just makes each core busier. In the benchmark below this makes pass 2 about 3.7 times faster *per core* (0.82 s down to 0.22 s on an Apple M2; the gain depends on the CPU).
+
+![Four independent lanes fill time that one chain spends waiting](illustrations/04_lanes.png)
 
 ### Where the time goes
 
