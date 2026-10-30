@@ -1,6 +1,6 @@
 # Hénon–Heiles orbit with leapfrog (velocity Verlet) – the two-pass checkpoint method
 
-![Header Image](Header.png)
+![Header Image](henon_heiles_orbit_preview.png)
 
 A small example that draws where one particle spends its time in the Hénon–Heiles potential. It follows the particle for 100 million leapfrog steps and uses all CPU cores. The trick is the one from the Hopalong project (`hopalong_fast.py`): walk the orbit once to plant checkpoints, then let many workers replay the pieces in parallel.
 
@@ -163,7 +163,7 @@ Pass 1 can't be skipped, so the total never gets below 0.77 s. Pass 2 repeats th
 
 ## Reading the picture
 
-![Orbit density in the Hénon–Heiles potential](header.png)
+![Orbit density in the Hénon–Heiles potential](henon_heiles_orbit_preview.png)
 
 The particle was followed for 10⁸ steps of length 0.01, that is 10⁶ time units. Each step adds one tally to the pixel where the particle is.
 
