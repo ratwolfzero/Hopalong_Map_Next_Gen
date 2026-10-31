@@ -40,7 +40,7 @@ def step(x, y, px, py, fx, fy, h):                   # leapfrog: kick, drift (mo
 
 
 def start_state(y0=Y0, energy=ENERGY, h=DT):
-    px = float(np.sqrt(2 * (energy - (0.5 * y0 ** 2 - y0 ** 3 / 3))))     # from H = energy at x = 0, py = 0
+    px = float(np.sqrt(2 * (energy - (0.5 * y0 * y0 - y0 * y0 * y0 / 3))))    # from H = energy at x = 0, py = 0
     fx, fy = force(0.0, y0)
     return 0.0, y0, px - 0.5 * h * fx, 0.0 - 0.5 * h * fy                 # momentum half a step back
 
