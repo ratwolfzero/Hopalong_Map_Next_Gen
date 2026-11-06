@@ -9,6 +9,7 @@ Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or eve
 - **Small:** memory stays fixed however many points you compute (about 76 MB on an 8-thread machine, on top of Python and its libraries).
 - **Two output flavours:** *counts* (hits per pixel) or a proper *probability density* on the colour bar.
 - **Three colour scales:** linear, square root, logarithmic.
+- **Optional FMA variant** (`hopalong_fast_fma.py`): same results, slightly faster pass 1 – see [FMA variant](#fma-variant).
 - Interactive window (matplotlib) plus PNG export.
 
 ## Contents
@@ -30,6 +31,7 @@ Draws the **Hopalong map** (Barry Martin's map) from hundreds of millions or eve
     - [Density](#density)
     - [What the density option is not](#what-the-density-option-is-not)
   - [Colour scales](#colour-scales)
+  - [FMA variant](#fma-variant)
   - [Using it from Python](#using-it-from-python)
   - [Configuration](#configuration)
   - [Code map](#code-map)
@@ -74,6 +76,8 @@ Image saved to: <OUTPUT_DIR>/py_num=100000000_a=-3.14_b=0.3_c=0.3_sqrt_density.p
 ```
 
 Then a window opens with the picture, and a PNG is written to `OUTPUT_DIR`. **Change `OUTPUT_DIR` at the top of the script to a folder that exists on your machine.** The PNG is the raw 1000 × 1000 picture without axes; the file name encodes the parameters, the colour scale (`_sqrt`, `_log`) and the mode (`_density`).
+
+For the FMA variant run `python hopalong_fast_fma.py` instead (same prompts, same output; see [FMA variant](#fma-variant)).
 
 The first start takes a few seconds because numba compiles the kernels; they are cached on disk afterwards.
 
@@ -263,6 +267,24 @@ The tick labels are spaced evenly along the colour bar, not evenly in count valu
 
 ---
 
+## FMA variant
+
+`hopalong_fast_fma.py` is `hopalong_fast.py` with **one change**, the step function `_step`. Prompts, output and the Python interface are the same (`import hopalong_fast_fma as hf`).
+
+The `x` update ends with `y - sign(x) * s`, where `s = sqrt(|b*x - c|)`. The sign of `x` is known before the square root is finished, so it is folded into one **fused multiply-add** (`fma`, a single instruction that computes `a*b + c` with one rounding):
+
+$$
+x_{k+1} = \mathrm{fma}(-\mathrm{sg},\; s,\; y_k), \qquad \mathrm{sg} = \pm 1
+$$
+
+This replaces `copysign` + subtraction on the serial dependency chain. On the Apple M2, pass 1 is about 5.6 % faster than with `copysign(sqrt(...), x)`, for every parameter set tried. The benchmark table below was measured with `hopalong_fast.py`.
+
+**Still exact.** `sg * s` is exact (a multiplication by ±1), and the fma then rounds `y ∓ s` once, just like the plain subtraction, so the orbit is **bit-identical** to the plain formula (only the sign/payload bits of NaN may differ, and they are never used). It was checked on 3.4 million edge cases (±0, ±inf, NaN, denormals), on full images, and on orbits up to `n = 1e8` (final state and extents). `b*x - c` is deliberately **not** fused: that would round differently, and the chaotic map would drift away.
+
+**How.** numba has no `fma` function, so a small `@intrinsic` calls LLVM's `llvm.fma` (one `fmadd` on AArch64). It uses `llvmlite`, which is installed together with numba. The CPU needs a hardware FMA unit.
+
+---
+
 ## Using it from Python
 
 The file can be imported; nothing runs on import.
@@ -316,6 +338,7 @@ Other knobs:
 | --- | --- |
 | `make_plan(n)` | Chooses the number of tasks and cuts `n` points into segments. |
 | `_step` | One Hopalong iteration. The same function is used in both passes. |
+| `fma` | FMA variant only: numba intrinsic for `a*b + c` with one rounding, used by `_step`. |
 | `first_pass` | Pass 1: walks the orbit serially; returns the extents and the checkpoints. |
 | `_hit` | Maps a point to its cell (pixel mode or equal-width mode) and counts it. Points outside the grid, or NaN/infinite points, are discarded. |
 | `second_pass` | Pass 2: parallel over tasks (`prange`), four lanes per task, one private tally sheet per task. |
@@ -361,4 +384,5 @@ Memory, density histogram of the same orbit (extra peak RAM on top of what the i
 - **Not independent samples, and not a continuous density.** See [What the density option is not](#what-the-density-option-is-not).
 - **Extreme parameters.** If the orbit overflows to infinity or NaN, the extents and the picture are meaningless.
 - **Do not enable `fastmath`.** Pass 1 and pass 2 must compute bit-identical orbits for the checkpoints to be valid (the map is chaotic, see [Why the result is exactly the same](#why-the-result-is-exactly-the-same)).
+- **FMA variant.** Needs a hardware FMA unit. Do not fuse `b*x - c` as well; it changes the rounding and therefore the orbit.
 - **Platform.** The memory read-out uses the Unix-only `resource` module (macOS and Linux). Peak memory is reported in the unit appropriate for each platform.
