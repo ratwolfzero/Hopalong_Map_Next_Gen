@@ -277,11 +277,11 @@ $$
 x_{k+1} = \mathrm{fma}(-\mathrm{sg},\; s,\; y_k), \qquad \mathrm{sg} = \pm 1
 $$
 
-This replaces `copysign` + subtraction on the serial dependency chain. On the Apple M2, pass 1 is about 5.6 % faster than with `copysign(sqrt(...), x)`, for every parameter set tried. The benchmark table below was measured with `hopalong_fast.py`.
+This replaces `copysign` + subtraction on the serial dependency chain. On the Apple M2, pass 1 is about 5.6 % faster than with `copysign(sqrt(...), x)`, for every parameter set tried. The benchmark table below was measured with `hopalong_fast.py`. The gain depends on the CPU: on an x86-64 machine there might be no measurable gain, and no loss.
 
 **Still exact.** `sg * s` is exact (a multiplication by ±1), and the fma then rounds `y ∓ s` once, just like the plain subtraction, so the orbit is **bit-identical** to the plain formula (only the sign/payload bits of NaN may differ, and they are never used). It was checked on 3.4 million edge cases (±0, ±inf, NaN, denormals), on full images, and on orbits up to `n = 1e8` (final state and extents). `b*x - c` is deliberately **not** fused: that would round differently, and the chaotic map would drift away.
 
-**How.** numba has no `fma` function, so a small `@intrinsic` calls LLVM's `llvm.fma` (one `fmadd` on AArch64). It uses `llvmlite`, which is installed together with numba. The CPU needs a hardware FMA unit.
+**How.** numba has no `fma` function, so a small `@intrinsic` calls LLVM's `llvm.fma` (one `fmadd` on AArch64). It uses `llvmlite`, which is installed together with numba. The CPU needs a hardware FMA unit (Apple Silicon, x86-64 since about 2013).
 
 ---
 
